@@ -1056,7 +1056,7 @@ void taskLedStrip(void)
 void taskTransponder(void)
 {
     if (feature(FEATURE_TRANSPONDER)) {
-        updateTransponder();
+	    updateTransponder(transponderType()->Type);
     }
 }
 #endif
