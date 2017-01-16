@@ -18,17 +18,23 @@
 #pragma once
 
 typedef struct transponderConfig_s {
-    uint8_t data[6];
+    uint8_t data[9];
 } transponderConfig_t;
 
-PG_DECLARE(transponderConfig_t, transponderConfig);
+typedef struct transponderType_s {
+	uint8_t Type[1];
+} transponderType_t;
 
-void transponderInit(uint8_t* transponderCode);
+PG_DECLARE(transponderConfig_t, transponderConfig);
+PG_DECLARE(transponderType_t, transponderType);
+
+void transponderInit(uint8_t* transponderCode, uint8_t* transponderType); 
 
 void transponderEnable(void);
 void transponderDisable(void);
-void updateTransponder(void);
-void transponderUpdateData(uint8_t* transponderData);
-void transponderTransmitOnce(void);
+void updateTransponder(const uint8_t* transponderCode);
+void transponderUpdateData(uint8_t* transponderData, uint8_t* transponderType);
+//void transponderUpdateType(uint8_t* transponderTipe);
+void transponderTransmitOnce(const uint8_t* transponderType);
 void transponderStartRepeating(void);
 void transponderStopRepeating(void);
