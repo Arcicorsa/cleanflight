@@ -35,11 +35,13 @@
  *
  * On an STM32F303CC 720 bytes is currently fine and that is the target for which this code was designed for.
  */
+uint8_t transponderIrDMABuffer1[TRANSPONDER_DMA_BUFFER_SIZE_ARCITIMER];
 uint8_t transponderIrDMABuffer[TRANSPONDER_DMA_BUFFER_SIZE];
 
 volatile uint8_t transponderIrDataTransferInProgress = 0;
 
 static dmaCallbackHandler_t transponderDMACallbacRec;
+
 
 void transponderDMAHandler(dmaChannel_t* descriptor, dmaCallbackHandler_t* handler)
 {
@@ -52,12 +54,21 @@ void transponderDMAHandler(dmaChannel_t* descriptor, dmaCallbackHandler_t* handl
     }
 }
 
-void transponderIrInit(void)
+void transponderIrInit(const uint8_t* transponderType)
 {
-    memset(&transponderIrDMABuffer, 0, TRANSPONDER_DMA_BUFFER_SIZE);
+	uint8_t transponderTypeLocal = *transponderType;
+	
+	if (transponderTypeLocal == 0x0) {
+		memset(&transponderIrDMABuffer1, 0, TRANSPONDER_DMA_BUFFER_SIZE_ARCITIMER);
+	}
+	else if(transponderTypeLocal == 0x1) {
+		memset(&transponderIrDMABuffer, 0, TRANSPONDER_DMA_BUFFER_SIZE);
+
+	}
+	
     dmaHandlerInit(&transponderDMACallbacRec, transponderDMAHandler);
     dmaSetHandler(TRANSPONDER_DMA_HANDLER_IDENTIFER, &transponderDMACallbacRec, NVIC_PRIO_TRANSPONDER_DMA);
-    transponderIrHardwareInit();
+	transponderIrHardwareInit(transponderType); 
 }
 
 bool isTransponderIrReady(void)
@@ -67,40 +78,69 @@ bool isTransponderIrReady(void)
 
 static uint16_t dmaBufferOffset;
 
-void updateTransponderDMABuffer(const uint8_t* transponderData)
+
+void updateTransponderDMABuffer(const uint8_t* transponderData, const uint8_t* transponderType)
 {
-    uint8_t byteIndex;
+	uint8_t transponderTypeLocal = *transponderType;
+	
+	uint8_t byteIndex;
     uint8_t bitIndex;
     uint8_t toggleIndex;
 
-    for (byteIndex = 0; byteIndex < TRANSPONDER_DATA_LENGTH; byteIndex++) {
+	if (transponderTypeLocal == 0x0) {
+		
 
-        uint8_t byteToSend = *transponderData;
-        transponderData++;
-        for (bitIndex = 0; bitIndex < TRANSPONDER_BITS_PER_BYTE; bitIndex++)
-        {
-            bool doToggles = false;
-            if (bitIndex == 0) {
-                doToggles = true;
-            } else if (bitIndex == TRANSPONDER_BITS_PER_BYTE - 1) {
-                doToggles = false;
-            } else {
-                doToggles = byteToSend & (1 << (bitIndex - 1));
-            }
+		for (byteIndex = 0; byteIndex < TRANSPONDER_DATA_LENGTH_ARCITIMER; byteIndex++) {
 
-            for (toggleIndex = 0; toggleIndex < TRANSPONDER_TOGGLES_PER_BIT; toggleIndex++)
-            {
-                if (doToggles) {
-                    transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_1;
-                } else {
-                    transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_0;
-                }
-                dmaBufferOffset++;
-            }
-            transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_0;
-            dmaBufferOffset++;
-        }
-    }
+			uint8_t byteToSend = *transponderData;
+			transponderData++;
+			for (bitIndex = 0; bitIndex < TRANSPONDER_BITS_PER_BYTE_ARCITIMER; bitIndex++)
+			{
+				bool doToggles = byteToSend & (1 << (bitIndex));
+
+				for (toggleIndex = 0; toggleIndex < TRANSPONDER_TOGGLES_PER_BIT_ARCITIMER; toggleIndex++)
+				{
+					transponderIrDMABuffer1[dmaBufferOffset] = doToggles ? BIT_TOGGLE_1 : BIT_TOGGLE_0;
+					dmaBufferOffset++;
+				}
+			}
+		}
+	}
+	else if(transponderTypeLocal == 0x1) {
+		
+
+		for (byteIndex = 0; byteIndex < TRANSPONDER_DATA_LENGTH; byteIndex++) {
+
+			uint8_t byteToSend = *transponderData;
+			transponderData++;
+			for (bitIndex = 0; bitIndex < TRANSPONDER_BITS_PER_BYTE; bitIndex++)
+			{
+				bool doToggles = false;
+				if (bitIndex == 0) {
+					doToggles = true;
+				}
+				else if (bitIndex == TRANSPONDER_BITS_PER_BYTE - 1) {
+					doToggles = false;
+				}
+				else {
+					doToggles = byteToSend & (1 << (bitIndex - 1));
+				}
+
+				for (toggleIndex = 0; toggleIndex < TRANSPONDER_TOGGLES_PER_BIT; toggleIndex++)
+				{
+					if (doToggles) {
+						transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_1;
+					}
+					else {
+						transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_0;
+					}
+					dmaBufferOffset++;
+				}
+				transponderIrDMABuffer[dmaBufferOffset] = BIT_TOGGLE_0;
+				dmaBufferOffset++;
+			}
+		}
+	}
 }
 
 void transponderIrWaitForTransmitComplete(void)
@@ -112,20 +152,20 @@ void transponderIrWaitForTransmitComplete(void)
     }
 }
 
-void transponderIrUpdateData(const uint8_t* transponderData)
+void transponderIrUpdateData(const uint8_t* transponderData, const uint8_t* transponderType)
 {
     transponderIrWaitForTransmitComplete();
 
-    updateTransponderDMABuffer(transponderData);
+    updateTransponderDMABuffer(transponderData, transponderType);
 }
 
 
-void transponderIrTransmit(void)
+void transponderIrTransmit(const uint8_t* transponderType) 
 {
     transponderIrWaitForTransmitComplete();
 
     dmaBufferOffset = 0;
 
     transponderIrDataTransferInProgress = 1;
-    transponderIrDMAEnable();
+	transponderIrDMAEnable(transponderType); 
 }
